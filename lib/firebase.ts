@@ -14,6 +14,8 @@ import {
   collection,
   deleteDoc,
   enableIndexedDbPersistence,
+  FieldPath,
+  type DocumentData,
 } from "firebase/firestore"
 import { getAuth, signInAnonymously, type Auth } from "firebase/auth"
 
@@ -53,7 +55,7 @@ async function tryEnablePersistence(firestore: Firestore) {
   try {
     await enableIndexedDbPersistence(firestore)
   } catch {
-    // Ignore persistence errors; app will still function without offline cache
+    // Ignore; app still works without offline cache
   }
 }
 
@@ -66,12 +68,10 @@ function ensureInit() {
   } else {
     app = getApps()[0]!
   }
-  // Use long-polling to improve connectivity behind proxies/sandboxes
   db = initializeFirestore(app!, {
     experimentalAutoDetectLongPolling: true,
     useFetchStreams: false,
   })
-  // Best-effort offline cache
   void tryEnablePersistence(db)
   auth = getAuth(app!)
 }
@@ -134,7 +134,7 @@ export async function createInitialSession(): Promise<string> {
     files: {
       "main.js": "// Start coding...\nconsole.log('Hello from session: " + id.slice(0, 8) + "')",
       "index.html":
-        " Optional HTML file \n<!doctype html>\n<html>\n  <head><title>Preview</title></head>\n  <body><h1>Hello</h1></body>\n</html>",
+        "<!doctype html>\n<html>\n  <head><title>Preview</title></head>\n  <body><h1>Hello</h1></body>\n</html>",
     },
     output: "",
     participants: [],
@@ -147,18 +147,17 @@ export function getSessionDocRef(sessionId: string) {
   return doc(db, "sessions", sessionId)
 }
 
+// Use FieldPath to update filenames with dots safely
 export async function updateFileContent(sessionId: string, filename: string, code: string) {
   const db = getDb()
-  await updateDoc(doc(db, "sessions", sessionId), {
-    [`files.${filename}`]: code,
-  })
+  const ref = doc(db, "sessions", sessionId)
+  await updateDoc(ref, new FieldPath("files", filename), code)
 }
 
 export async function addFile(sessionId: string, filename: string, initial = "// New file") {
   const db = getDb()
-  await updateDoc(doc(db, "sessions", sessionId), {
-    [`files.${filename}`]: initial,
-  })
+  const ref = doc(db, "sessions", sessionId)
+  await updateDoc(ref, new FieldPath("files", filename), initial)
 }
 
 export async function updateOutput(sessionId: string, text: string) {
@@ -168,6 +167,29 @@ export async function updateOutput(sessionId: string, text: string) {
   })
 }
 
+// Flatten nested maps like { main: { js: "..." } } into { "main.js": "..." }
+function flattenFilesMap(input: any): Record<string, string> {
+  const out: Record<string, string> = {}
+  function walk(node: any, prefix: string[]) {
+    if (typeof node === "string") {
+      const name = prefix.join(".")
+      out[name] = node
+      return
+    }
+    if (node && typeof node === "object") {
+      for (const [k, v] of Object.entries(node)) {
+        walk(v as DocumentData, [...prefix, k])
+      }
+    }
+  }
+  if (input && typeof input === "object") {
+    for (const [k, v] of Object.entries(input)) {
+      walk(v as DocumentData, [k])
+    }
+  }
+  return out
+}
+
 export async function joinSessionStream(
   sessionId: string,
   onData: (data: { files?: Record<string, string>; output?: string }) => void,
@@ -175,7 +197,7 @@ export async function joinSessionStream(
   const db = getDb()
   const ref = doc(db, "sessions", sessionId)
 
-  // Try to ensure the session doc exists; if offline or not found, don't hard-fail.
+  // Ensure session exists (best-effort)
   try {
     const snap = await getDoc(ref)
     if (!snap.exists()) {
@@ -187,10 +209,9 @@ export async function joinSessionStream(
       })
     }
   } catch {
-    // Could be offline; proceed to listen below. First snapshot will sync when online.
+    // offline or permission issue; the listener below will catch up later
   }
 
-  // Presence: add/update participant; resilient to offline (best-effort)
   const u = await ensureAnonUser()
   const uid = u.uid
   const presenceRef = doc(db, "sessions", sessionId, "participants", uid)
@@ -206,9 +227,7 @@ export async function joinSessionStream(
       },
       { merge: true },
     )
-  } catch {
-    // Ignore if offline; heartbeat below will fix when online
-  }
+  } catch {}
 
   const beforeUnload = async () => {
     try {
@@ -231,15 +250,36 @@ export async function joinSessionStream(
     } catch {}
   }, 20000)
 
+  let isNormalizing = false
+
   const unsub = onSnapshot(
     ref,
-    (d) => {
+    async (d) => {
       const data = d.data() as any
-      onData({ files: data?.files, output: data?.output })
+      let files = (data?.files as any) || {}
+      // Detect nested structure and normalize it
+      const flattened = flattenFilesMap(files)
+      const needsNormalize =
+        Object.keys(flattened).length > 0 &&
+        // if any top-level value is an object, it's a sign of incorrect nested map
+        Object.values(files).some((v: any) => v && typeof v === "object")
+
+      if (needsNormalize && !isNormalizing) {
+        try {
+          isNormalizing = true
+          await setDoc(ref, { files: flattened }, { merge: true })
+          files = flattened
+        } catch {
+          // ignore; try again next snapshot
+        } finally {
+          isNormalizing = false
+        }
+      }
+
+      onData({ files: files as Record<string, string>, output: data?.output })
     },
-    // Optional error handler to avoid unhandled errors when offline
     () => {
-      // keep silent; Firestore will retry automatically
+      // silent error; Firestore will retry
     },
   )
 
@@ -264,9 +304,7 @@ export function useParticipants(sessionId: string) {
       (snap) => {
         setList(snap.docs.map((d) => d.data() as any))
       },
-      () => {
-        // ignore errors; retries when back online
-      },
+      () => {},
     )
     return () => unsub()
   }, [sessionId])

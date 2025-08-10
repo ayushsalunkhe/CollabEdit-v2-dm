@@ -55,6 +55,13 @@ export default function HomePage() {
                 Firebase not configured. Click "Setup Firebase" to paste your client config.
               </div>
             )}
+            <Link
+              href="https://vercel.com"
+              target="_blank"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              Deploy on Vercel <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
           </CardContent>
         </Card>
 
