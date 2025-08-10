@@ -1,3 +1,4 @@
+/* Commenting out entire chat component
 "use client"
 
 import { useEffect, useRef, useState } from "react"
@@ -74,3 +75,4 @@ export function Chat({ sessionId = "" }: { sessionId?: string }) {
     </div>
   )
 }
+*/
