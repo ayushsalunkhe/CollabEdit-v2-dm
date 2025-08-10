@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Copy, Play, Users, FileCode, Plus, Terminal, MessageSquare, LinkIcon } from "lucide-react"
+import { Copy, Play, Users, FileCode, Plus, Terminal, LinkIcon } from "lucide-react"
 import {
   getFirebaseSafe,
   ensureAnonUser,
@@ -18,7 +18,7 @@ import {
   updateOutput,
 } from "@/lib/firebase"
 import { EditorPane } from "@/components/editor"
-import { Chat } from "@/components/chat"
+// import { Chat } from "@/components/chat"
 import { FileTree } from "@/components/file-tree"
 import Link from "next/link"
 
@@ -259,6 +259,7 @@ export default function SessionPage() {
             </div>
           </section>
 
+          {/* Comment out entire chat aside section
           <aside className="border-l hidden lg:flex flex-col min-w-0">
             <div className="p-3 font-medium text-sm flex items-center gap-2 border-b">
               <MessageSquare className="h-4 w-4" />
@@ -266,6 +267,7 @@ export default function SessionPage() {
             </div>
             <Chat sessionId={String(sessionId)} />
           </aside>
+          */}
         </div>
       </div>
     </main>
