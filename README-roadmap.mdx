@@ -1,0 +1,19 @@
+# Online Collaborative IDE — Roadmap and Notes
+
+This app follows the phases you outlined:
+- Phase 1: Monaco Editor in the browser with React.
+- Phase 2: Firebase setup with Firestore and Anonymous Auth (UI to paste client config in preview).
+- Phase 3: Sessions: unique IDs, shareable links: `/session/{id}`.
+- Phase 4: Real-time collaboration via Firestore onSnapshot + debounced updateDoc.
+- Phase 5: Session-based chat with messages subcollection.
+- Phase 6: Code execution via Judge0 (optional, needs server env: JUDGE0_API_KEY).
+- Phase 7: Multi-file support (files map with add file UI).
+- Phase 8: VS Code-like layout using shadcn/ui and Tailwind; presence counter.
+- Phase 9: Security rules — set in Firebase console (dev is open; tighten before prod).
+
+Deploy notes:
+- Next.js App Router runs great on Vercel [^2]. React app setup aligns with current recommendations [^3].
+- Set Firebase client config as NEXT_PUBLIC_* env vars on Vercel, or paste locally on the home page.
+- Set JUDGE0_API_KEY (and optionally JUDGE0_API_HOST) in Vercel Project Settings for code execution.
+
+\`\`\`
